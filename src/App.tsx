@@ -133,7 +133,7 @@ export function Home() {
         <div className="container-wide hero-content reveal">
           <div className="eyebrow" style={{ color: '#e5a185' }}>Oxel · Siolim · North Goa</div>
           <h1 className="display-font hero-title">Feels like<br />home.</h1>
-          <p className="hero-subtitle"><strong>A 7-bedroom villa with its own pool, minutes from Anjuna and Assagao.</strong> Made for long lunches, slow mornings and the people you came to be with.</p>
+          <p className="hero-subtitle"><strong>A 7-bedroom villa with its own pool, about 15 minutes from Anjuna and Assagao.</strong> Made for long lunches, slow mornings and the people you came to be with.</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 31 }}>
             <a href="#enquire" className="nav-cta" data-testid="link-hero-enquire">Enquire for rates <ArrowRight size={15} /></a>
             <a href="#the-house" className="outline-button" data-testid="link-hero-explore">Walk through the house <ArrowDown size={15} /></a>
@@ -191,7 +191,7 @@ export function Home() {
             <div>
               <div className="eyebrow">Beyond the gate</div>
               <h2 className="display-font section-title">The neighbourhood,<br /><em>curated.</em></h2>
-              <p className="muted-copy">The house sits in the quiet part of North Goa — the beaches, restaurants and markets you came for are minutes away. We keep the full list, with the team's current favourites, on one page.</p>
+              <p className="muted-copy">The house sits in the quiet part of North Goa — the beaches, restaurants and markets you came for are about 15 minutes away. We keep the full list, with the team's current favourites, on one page.</p>
               <a className="nav-cta" href="/explore" data-testid="link-teaser-explore" style={{ marginTop: 26 }}>Things to do around the house <ArrowRight size={15} /></a>
             </div>
             <div className="teaser-cards">
@@ -207,7 +207,7 @@ export function Home() {
             <div className="reveal">
               <div className="eyebrow">Location</div>
               <h2 className="display-font section-title">Quiet Siolim,<br /><em>close to it all.</em></h2>
-              <p className="muted-copy">The house sits in Oxel, the calm edge of Siolim — fifteen minutes from Anjuna and Assagao, twenty from Vagator, under an hour from the airport.</p>
+              <p className="muted-copy">The house sits in Oxel, the calm edge of Siolim — about fifteen minutes from Anjuna, Vagator and Assagao, and under an hour from the airport.</p>
               <div className="location-distance"><span>Anjuna · 15 min</span><span>Vagator · 20 min</span><span>Assagao · 12 min</span><span>Mopa Airport · 50 min</span></div>
               <a className="nav-cta" href={MAPS_SHARE_URL} target="_blank" rel="noreferrer" style={{ marginTop: 26 }} data-testid="link-open-maps">Open in Google Maps <ArrowUpRight size={15} /></a>
             </div>
@@ -279,7 +279,7 @@ export function Home() {
             <div className="eyebrow">The spaces between</div>
             <h2 className="display-font section-title" style={{ maxWidth: 600 }}>Made for the way a good stay unfolds.</h2>
             <div className="feature-grid">
-              <div className="feature-main image-frame reveal"><img src="/oxel-interior.jpg" alt="The family lounge at Oxel House with garden views" data-testid="img-lounge" /><div className="image-caption">The family lounge · 65-inch Smart TV</div></div>
+              <div className="feature-main image-frame reveal"><img src="/oxel-interior.jpg" alt="The family lounge at Oxel House, opening onto the pool" data-testid="img-lounge" /><div className="image-caption">The family lounge · opens onto the pool</div></div>
               <div className="feature-side">
                 <article className="feature-tile"><span className="tile-number">01 / GATHER</span><div><h3 className="display-font" style={{ fontSize: '2rem', margin: '0 0 8px' }}>Your own<br />common ground.</h3><p>Movie nights, proper meals, slow afternoons. Rooms generous enough for everyone, without ever feeling formal.</p></div></article>
                 <article className="feature-tile dark-tile"><span className="tile-number">02 / RETREAT</span><div><h3 className="display-font" style={{ fontSize: '2rem', margin: '0 0 8px' }}>Seven rooms.<br />No compromise.</h3><p>Seven air-conditioned en-suite bedrooms — everyone gets a door that closes, even when the house is full.</p></div></article>
