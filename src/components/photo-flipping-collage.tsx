@@ -5,24 +5,31 @@ import { GALLERY_PHOTOS } from '@/photo-list';
 /* ---------------------------------------------------------------------------
  * Oxel House Photo Collage — wall-calendar page turns
  *
- * Each tile is a photo in the collage that turns like a calendar page: hinged
- * along its top edge, lifting up and folding over, with the next photo already
- * mounted underneath so the reveal is progressive and the hand-over is
- * invisible.
+ * A long scrolling wall of tiles. Each tile is a photo that turns like a
+ * calendar page: hinged along its top edge, lifting up and folding over, with
+ * the next photo already mounted underneath so the reveal is progressive and
+ * the hand-over is invisible.
  *
  * Interactions:
+ *   - Scroll, then stop ............ every tile that is on screen at that
+ *                                    moment turns over (lightly staggered)
  *   - Tap / Click any photo ........ immediately turn that photo
  *   - Expand icon / Double click ... open full-size lightbox viewer
- *   - Auto-advance ................. turns photos automatically in rotation
- *   - Scrolling .................... pauses during movement, then resumes
- *                                    promptly with a fresh flip once scroll stops
+ *
+ * Nothing turns while the page is moving, and tiles off screen never animate.
  * --------------------------------------------------------------------------- */
 
 const PHOTOS = GALLERY_PHOTOS;
-const TILE_COUNT = 7;
+// Multiple of 7: the CSS lays tiles out in repeating blocks of 7, so this
+// keeps the last block complete (no gaps at the bottom of the wall).
+const TILE_COUNT = 49;
 const FLIP_DURATION_MS = 980; // keep in sync with --collage-turn-ms in index.css
 const SETTLE_CLEAR_MS = 90; // must outlast the guarded class-swap frame(s), cleared by timer not rAF
-const SCROLL_IDLE_RESUME_MS = 1400; // Resumes 1.4s after scrolling stops
+const SCROLL_IDLE_MS = 260; // scroll counts as "stopped" after this much stillness
+const STAGGER_MS = 90; // delay between neighbouring tiles when a batch turns
+const MIN_VISIBLE_FRACTION = 0.5; // a tile must be at least half on screen to turn
+const INITIAL_KICK_MS = 900; // first batch after the page loads
+const EAGER_TILES = 6; // only the first screenful loads eagerly
 
 interface TileState {
   photo: number;
@@ -55,18 +62,16 @@ export default function PhotoFlippingCollage() {
 
   const [tiles, setTiles] = useState<TileState[]>(initialTiles);
   const [viewer, setViewer] = useState<number | null>(null);
-  const [paused, setPaused] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
 
   const tilesRef = useRef(tiles);
   tilesRef.current = tiles;
 
-  const rootRef = useRef<HTMLDivElement>(null);
-  const nextTileIndexRef = useRef(0);
+  const tileEls = useRef<(HTMLElement | null)[]>([]);
   const seenPhotos = useRef<Set<number>>(new Set(tiles.map((t) => t.photo)));
   const reserved = useRef<Set<number>>(new Set());
   const commitTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
   const settleTimers = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const staggerTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const startingTiles = useRef<Set<number>>(new Set()); // turns waiting on image decode
   const mounted = useRef(true);
 
@@ -196,46 +201,34 @@ export default function PhotoFlippingCollage() {
     [commitTile, photoCount, pickNextPhoto],
   );
 
-  /* Visibility observer: only run animation when gallery is on screen */
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setIsVisible(entry?.isIntersecting ?? true);
-      },
-      { threshold: 0.1 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+  const cancelPendingStagger = useCallback(() => {
+    staggerTimers.current.forEach((id) => clearTimeout(id));
+    staggerTimers.current = [];
   }, []);
 
-  /* Auto-advance timer: turns tiles in graceful staggered sequence */
-  useEffect(() => {
-    if (paused || !isVisible) return;
+  /* Turn every tile that is (mostly) on screen right now, in reading order */
+  const turnVisibleTiles = useCallback(() => {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    cancelPendingStagger();
 
-    // First flip fires shortly after resuming/mounting (1.2s)
-    const initialKick = setTimeout(() => {
-      const idx = nextTileIndexRef.current % TILE_COUNT;
-      nextTileIndexRef.current = (nextTileIndexRef.current + 1) % TILE_COUNT;
-      turnTile(idx);
-    }, 1200);
+    const viewportH = window.innerHeight;
+    const visible: number[] = [];
+    tileEls.current.forEach((el, idx) => {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const shown = Math.min(rect.bottom, viewportH) - Math.max(rect.top, 0);
+      if (shown / rect.height >= MIN_VISIBLE_FRACTION) visible.push(idx);
+    });
 
-    // Regular interval: turns a tile every 5.5s
-    const interval = setInterval(() => {
-      const idx = nextTileIndexRef.current % TILE_COUNT;
-      nextTileIndexRef.current = (nextTileIndexRef.current + 1) % TILE_COUNT;
-      turnTile(idx);
-    }, 5500);
+    visible.forEach((idx, n) => {
+      staggerTimers.current.push(setTimeout(() => turnTile(idx), n * STAGGER_MS));
+    });
+  }, [cancelPendingStagger, turnTile]);
 
-    return () => {
-      clearTimeout(initialKick);
-      clearInterval(interval);
-    };
-  }, [paused, isVisible, turnTile]);
-
-  /* Scrolling pauses auto-turn, and resumes promptly when scrolling stops */
+  /* Scroll, then stop: the tiles on screen at that moment turn over.
+     While the page is moving nothing new starts (and any batch still waiting
+     in its stagger is cancelled), so the wall never animates under a thumb. */
   useEffect(() => {
     let lastY = window.scrollY;
     let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -245,21 +238,28 @@ export default function PhotoFlippingCollage() {
       if (Math.abs(currentY - lastY) < 3) return;
       lastY = currentY;
 
-      setPaused(true);
-
+      cancelPendingStagger();
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         idleTimer = null;
-        setPaused(false); // Resumes, triggering the initialKick within 1.2s
-      }, SCROLL_IDLE_RESUME_MS);
+        turnVisibleTiles();
+      }, SCROLL_IDLE_MS);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // Greet the visitor with a first batch shortly after the page opens
+    // (cancelled automatically if they start scrolling right away).
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      turnVisibleTiles();
+    }, INITIAL_KICK_MS);
+
     return () => {
       window.removeEventListener('scroll', handleScroll);
       if (idleTimer) clearTimeout(idleTimer);
     };
-  }, []);
+  }, [cancelPendingStagger, turnVisibleTiles]);
 
   /* Clean up timers on unmount */
   useEffect(() => {
@@ -272,6 +272,8 @@ export default function PhotoFlippingCollage() {
       timers.clear();
       settles.forEach((id) => clearTimeout(id));
       settles.clear();
+      staggerTimers.current.forEach((id) => clearTimeout(id));
+      staggerTimers.current = [];
     };
   }, []);
 
@@ -299,19 +301,26 @@ export default function PhotoFlippingCollage() {
 
   return (
     <>
-      <div className="gallery-collage-wrap" ref={rootRef}>
+      <div className="gallery-collage-wrap">
         <div
           className="gallery-collage"
           role="list"
-          aria-label="Oxel House photo album — tap any photo to turn it"
+          aria-label="Oxel House photo album — scroll and pause to turn the photos, or tap any photo to turn it"
         >
           {tiles.map((tile, idx) => {
-            const incomingPhoto = tile.incoming ?? tile.photo;
+            // The underlay only needs an <img> while a page is turning (and
+            // through the settle). With 49 tiles, mounting 49 extra images
+            // up front would double the page's image load for nothing.
+            const underlayPhoto = tile.incoming ?? tile.photo;
+            const showUnderlay = tile.incoming !== null || tile.settling;
 
             return (
               <article
                 key={idx}
-                className={`collage-tile collage-tile-${idx + 1}${tile.turning ? ' is-turning' : ''}${tile.settling ? ' is-settling' : ''}`}
+                ref={(el) => {
+                  tileEls.current[idx] = el;
+                }}
+                className={`collage-tile${tile.turning ? ' is-turning' : ''}${tile.settling ? ' is-settling' : ''}`}
                 role="listitem"
                 tabIndex={0}
                 aria-label={`Photo ${idx + 1}: ${captionOf(tile.photo)}. Tap to turn, or expand to view full size.`}
@@ -332,16 +341,20 @@ export default function PhotoFlippingCollage() {
                     the hand-over swap is invisible. Its ::after casts the
                     turning page's shadow. */}
                 <div className="collage-underlay" aria-hidden="true">
-                  <img
-                    className="collage-img"
-                    src={srcOf(incomingPhoto)}
-                    alt=""
-                    draggable={false}
-                    loading="eager"
-                  />
-                  <div className="collage-caption-pill">
-                    <span>{captionOf(incomingPhoto)}</span>
-                  </div>
+                  {showUnderlay && (
+                    <>
+                      <img
+                        className="collage-img"
+                        src={srcOf(underlayPhoto)}
+                        alt=""
+                        draggable={false}
+                        decoding="async"
+                      />
+                      <div className="collage-caption-pill">
+                        <span>{captionOf(underlayPhoto)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* 3D Page — hinged at the top edge, lifts and folds over. */}
@@ -360,7 +373,8 @@ export default function PhotoFlippingCollage() {
                       src={srcOf(tile.photo)}
                       alt={captionOf(tile.photo)}
                       draggable={false}
-                      loading={idx < 4 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      loading={idx < EAGER_TILES ? 'eager' : 'lazy'}
                     />
                     <div className="collage-caption-pill">
                       <span>{captionOf(tile.photo)}</span>
