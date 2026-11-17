@@ -1,0 +1,25 @@
+{
+  // Oxel House Goa — static SPA + a health-only Worker.
+  // Enquiries never touch the server: the form opens WhatsApp directly (src/App.tsx).
+  // Deploy: pnpm --filter @workspace/oxel-house-villa run deploy
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "oxel-house-villa",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-15",
+  "assets": {
+    // Vite build output (configured in vite.config.ts build.outDir).
+    "directory": "./dist/public",
+    // Serve index.html for unknown paths so wouter client routes work.
+    "not_found_handling": "single-page-application",
+    // /gallery (not /gallery/) is the canonical URL in sitemap + rel=canonical,
+    // so serve sub-page HTML without the trailing-slash 307.
+    "html_handling": "drop-trailing-slash",
+    // Only /api/* runs the Worker; everything else is served free from the edge.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": {
+    "enabled": true
+  }
+  // No secrets needed. After deploy: dashboard → Workers → oxel-house-villa →
+  // Domains → add your custom domain.
+}
